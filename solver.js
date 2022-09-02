@@ -1,6 +1,6 @@
 const SLEEP_TIME = 10;
 const GOAL_NUMBER = 100;
-const METHOD = ['neighbors', 'random'].includes((process.env.METHOD ? process.env.METHOD : '').toLowerCase()) ? process.env.METHOD : 'DEFAULT';
+const METHOD = ['neighbors', 'random', 'distance'].includes((process.env.METHOD ? process.env.METHOD : '').toLowerCase()) ? process.env.METHOD : 'DEFAULT';
 const NOTIFICATIONS = process.env.ENABLE_NOTIFICATIONS === 'true' ? true : false;
 const DEBUG = false;
 
@@ -41,11 +41,12 @@ class Cell {
 }
 
 class Move {
-    constructor(x, y, dir, numNeighbors) {
+    constructor(x, y, dir, numNeighbors, distanceFromStart) {
         this.x = x;
         this.y = y;
         this.direction = dir;
         this.numNeighbors = numNeighbors;
+        this.distanceFromStart = distanceFromStart;
     }
 }
 
@@ -121,47 +122,68 @@ class Grid {
         }
     }
 
+    distanceFromStart(cell) {
+        if (this.cells.length === 0) {
+            return 0;
+        }
+        
+        const firstCell = this.cells[0];
+
+        const x = Math.abs(firstCell.x - cell.x);
+        const y = Math.abs(firstCell.y - cell.y);
+
+        return x + y;
+    }
+
     availableMoves(cell) {
         const moves = [];
 
         // NORTH
         if (cell.y >= 3 && this.grid[cell.y - 3][cell.x].value == null) {
-            moves.push(new Move(cell.x, cell.y - 3, 'NORTH', this.numNeighbors(this.grid[cell.y - 3][cell.x])));
+            const targetCell = this.grid[cell.y - 3][cell.x];
+            moves.push(new Move(cell.x, cell.y - 3, 'NORTH', this.numNeighbors(targetCell), this.distanceFromStart(targetCell)));
         }
 
         // EAST
         if (cell.x <= 6 && this.grid[cell.y][cell.x + 3].value == null) {
-            moves.push(new Move(cell.x + 3, cell.y, 'EAST', this.numNeighbors(this.grid[cell.y][cell.x + 3])));
+            const targetCell = this.grid[cell.y][cell.x + 3];
+            moves.push(new Move(cell.x + 3, cell.y, 'EAST', this.numNeighbors(targetCell), this.distanceFromStart(targetCell)));
         }
 
         // SOUTH
         if (cell.y <= 6 && this.grid[cell.y + 3][cell.x].value == null) {
-            moves.push(new Move(cell.x, cell.y + 3, 'SOUTH', this.numNeighbors(this.grid[cell.y + 3][cell.x])));
+            const targetCell = this.grid[cell.y + 3][cell.x];
+            moves.push(new Move(cell.x, cell.y + 3, 'SOUTH', this.numNeighbors(targetCell), this.distanceFromStart(targetCell)));
         }
 
         // WEST
         if (cell.x >= 3 && this.grid[cell.y][cell.x - 3].value == null) {
-            moves.push(new Move(cell.x - 3, cell.y, 'WEST', this.numNeighbors(this.grid[cell.y][cell.x - 3])));
+            const targetCell = this.grid[cell.y][cell.x - 3];
+            moves.push(new Move(cell.x - 3, cell.y, 'WEST', this.numNeighbors(targetCell), this.distanceFromStart(targetCell)));
         }
 
         // NORTH-EAST
         if (cell.x <= 7 && cell.y >= 2 && this.grid[cell.y - 2][cell.x + 2].value == null) {
-            moves.push(new Move(cell.x + 2, cell.y - 2, 'NORTH-EAST', this.numNeighbors(this.grid[cell.y - 2][cell.x + 2])));
+            const targetCell = this.grid[cell.y - 2][cell.x + 2];
+            moves.push(new Move(cell.x + 2, cell.y - 2, 'NORTH-EAST', this.numNeighbors(targetCell), this.distanceFromStart(targetCell)));
         }
 
         // SOUTH-EAST
         if (cell.x <= 7 && cell.y <= 7 && this.grid[cell.y + 2][cell.x + 2].value == null) {
-            moves.push(new Move(cell.x + 2, cell.y + 2, 'SOUTH-EAST', this.numNeighbors(this.grid[cell.y + 2][cell.x + 2])));
+            const targetCell = this.grid[cell.y + 2][cell.x + 2];
+            moves.push(new Move(cell.x + 2, cell.y + 2, 'SOUTH-EAST', this.numNeighbors(targetCell), this.distanceFromStart(targetCell)));
         }
 
         // SOUTH-WEST
         if (cell.x >= 2 && cell.y <= 7 && this.grid[cell.y + 2][cell.x - 2].value == null) {
-            moves.push(new Move(cell.x - 2, cell.y + 2, 'SOUTH-WEST', this.numNeighbors(this.grid[cell.y + 2][cell.x - 2])));
+            const targetCell = this.grid[cell.y + 2][cell.x - 2];
+            moves.push(new Move(cell.x - 2, cell.y + 2, 'SOUTH-WEST', this.numNeighbors(targetCell), this.distanceFromStart(targetCell)));
         }
 
         // NORTH-WEST
         if (cell.x >= 2 && cell.y >= 2 && this.grid[cell.y - 2][cell.x - 2].value == null) {
-            moves.push(new Move(cell.x - 2, cell.y - 2, 'NORTH-WEST', this.numNeighbors(this.grid[cell.y - 2][cell.x - 2])));
+            const targetCell = this.grid[cell.y - 2][cell.x - 2];
+            moves.push(new Move(cell.x - 2, cell.y - 2, 'NORTH-WEST', this.numNeighbors(targetCell), this.distanceFromStart(targetCell)));
         }
 
         switch (METHOD.toLowerCase()) {
@@ -174,6 +196,8 @@ class Grid {
                     })
                     .sort((a, b) => a.weight - b.weight)
                     .map(obj => obj.move);
+            case 'distance':
+                return moves.sort((a,b) => a.distanceFromStart - b.distanceFromStart);
             default:
                 return moves;
         }
