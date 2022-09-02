@@ -1,14 +1,14 @@
 const SLEEP_TIME = 10;
 const GOAL_NUMBER = 100;
-const RANDOMIZE_MOVE_ORDER = false;
+const METHOD = ['neighbors', 'random'].includes((process.env.METHOD ? process.env.METHOD : '').toLowerCase()) ? process.env.METHOD : 'DEFAULT';
 const NOTIFICATIONS = process.env.ENABLE_NOTIFICATIONS === 'true' ? true : false;
 const DEBUG = false;
 
 const util = require('util');
 const exec = util.promisify(require('child_process').exec);
 
-const notify = async (message) => {
-    if (NOTIFICATIONS) {
+const notify = async (message, ignorePreference) => {
+    if (NOTIFICATIONS || ignorePreference) {
         await exec(`./notify.sh "${message}"`);
     }
 }
@@ -41,10 +41,11 @@ class Cell {
 }
 
 class Move {
-    constructor(x, y, dir) {
+    constructor(x, y, dir, numNeighbors) {
         this.x = x;
         this.y = y;
         this.direction = dir;
+        this.numNeighbors = numNeighbors;
     }
 }
 
@@ -86,7 +87,9 @@ class Grid {
     print(printAllMoves = false) {
         console.log('\u001B[2J\u001B[0;0f');
 
-        console.log(`Start: (${this.cells[0].x + 1},${this.cells[0].y + 1}), Method: ${RANDOMIZE_MOVE_ORDER ? 'RANDOM' : 'ORDER'}\nHighest: ${ getColorForCell(this.highestNumber)}, Backtracked to: ${getColorForCell(this.backtrackedTo)}`);
+        console.log(`Start: (${this.cells[0].x + 1},${this.cells[0].y + 1}), Method: ${METHOD ? METHOD.toUpperCase() : 'DEFAULT'}`);
+        console.log(`Highest: ${getColorForCell(this.highestNumber)}, Backtracked: ${getColorForCell(this.backtrackedTo)}`);
+        console.log(`Current: ${getColorForCell(this.cells[this.cells.length - 1].value)}`);
         console.log();
 
         console.log('---------------------------------------------------');
@@ -123,54 +126,57 @@ class Grid {
 
         // NORTH
         if (cell.y >= 3 && this.grid[cell.y - 3][cell.x].value == null) {
-            moves.push(new Move(cell.x, cell.y - 3, 'NORTH'));
+            moves.push(new Move(cell.x, cell.y - 3, 'NORTH', this.numNeighbors(this.grid[cell.y - 3][cell.x])));
         }
 
         // EAST
         if (cell.x <= 6 && this.grid[cell.y][cell.x + 3].value == null) {
-            moves.push(new Move(cell.x + 3, cell.y, 'EAST'));
+            moves.push(new Move(cell.x + 3, cell.y, 'EAST', this.numNeighbors(this.grid[cell.y][cell.x + 3])));
         }
 
         // SOUTH
         if (cell.y <= 6 && this.grid[cell.y + 3][cell.x].value == null) {
-            moves.push(new Move(cell.x, cell.y + 3, 'SOUTH'));
+            moves.push(new Move(cell.x, cell.y + 3, 'SOUTH', this.numNeighbors(this.grid[cell.y + 3][cell.x])));
         }
 
         // WEST
         if (cell.x >= 3 && this.grid[cell.y][cell.x - 3].value == null) {
-            moves.push(new Move(cell.x - 3, cell.y, 'WEST'));
+            moves.push(new Move(cell.x - 3, cell.y, 'WEST', this.numNeighbors(this.grid[cell.y][cell.x - 3])));
         }
 
         // NORTH-EAST
         if (cell.x <= 7 && cell.y >= 2 && this.grid[cell.y - 2][cell.x + 2].value == null) {
-            moves.push(new Move(cell.x + 2, cell.y - 2, 'NORTH-EAST'));
+            moves.push(new Move(cell.x + 2, cell.y - 2, 'NORTH-EAST', this.numNeighbors(this.grid[cell.y - 2][cell.x + 2])));
         }
 
         // SOUTH-EAST
         if (cell.x <= 7 && cell.y <= 7 && this.grid[cell.y + 2][cell.x + 2].value == null) {
-            moves.push(new Move(cell.x + 2, cell.y + 2, 'SOUTH-EAST'));
+            moves.push(new Move(cell.x + 2, cell.y + 2, 'SOUTH-EAST', this.numNeighbors(this.grid[cell.y + 2][cell.x + 2])));
         }
 
         // SOUTH-WEST
         if (cell.x >= 2 && cell.y <= 7 && this.grid[cell.y + 2][cell.x - 2].value == null) {
-            moves.push(new Move(cell.x - 2, cell.y + 2, 'SOUTH-WEST'));
+            moves.push(new Move(cell.x - 2, cell.y + 2, 'SOUTH-WEST', this.numNeighbors(this.grid[cell.y + 2][cell.x - 2])));
         }
 
         // NORTH-WEST
         if (cell.x >= 2 && cell.y >= 2 && this.grid[cell.y - 2][cell.x - 2].value == null) {
-            moves.push(new Move(cell.x - 2, cell.y - 2, 'NORTH-WEST'));
+            moves.push(new Move(cell.x - 2, cell.y - 2, 'NORTH-WEST', this.numNeighbors(this.grid[cell.y - 2][cell.x - 2])));
         }
 
-        if (RANDOMIZE_MOVE_ORDER) {
-            return moves
-                .map(move => { 
-                    return { move, weight: Math.random()}
-                })
-                .sort((a, b) => a.weight - b.weight)
-                .map(obj => obj.move);
+        switch (METHOD.toLowerCase()) {
+            case 'neighbors':
+                return moves.sort((a,b) => b.numNeighbors - a.numNeighbors);
+            case 'random':
+                return moves
+                    .map(move => { 
+                        return { move, weight: Math.random()}
+                    })
+                    .sort((a, b) => a.weight - b.weight)
+                    .map(obj => obj.move);
+            default:
+                return moves;
         }
-
-        return moves;
     }
 
     async sleep (time) {
@@ -204,6 +210,68 @@ class Grid {
 
         this.grid[move.y][move.x].value = null;
         return unreachableCells > 0;
+    }
+
+    numNeighbors(cell) {
+        let neighbors = 0;
+
+        if (cell.x > 0) {
+            // WEST
+            if (this.grid[cell.y][cell.x - 1].value) {
+                neighbors += 1;
+            }
+
+            // NORTH-WEST
+            if (cell.y > 0) {
+                if (this.grid[cell.y - 1][cell.x - 1].value) {
+                    neighbors += 1;
+                }
+            }
+
+            // SOUTH-WEST
+            if (cell.y < 9) {
+                if (this.grid[cell.y + 1][cell.x - 1].value) {
+                    neighbors += 1;
+                }
+            }
+        }
+
+        if (cell.x < 9) {
+            // EAST
+            if (this.grid[cell.y][cell.x + 1].value) {
+                neighbors += 1;
+            }
+
+            // SOUTH-EAST
+            if (cell.y < 9) {
+                if (this.grid[cell.y + 1][cell.x + 1].value) {
+                    neighbors += 1;
+                }
+            }
+
+            // NORTH-EAST
+            if (cell.y > 0) {
+                if (this.grid[cell.y - 1][cell.x + 1].value) {
+                    neighbors += 1;
+                }
+            }
+        }
+
+        // NORTH
+        if (cell.y > 0) {
+            if (this.grid[cell.y - 1][cell.x].value) {
+                neighbors += 1;
+            }
+        }
+
+        // SOUTH
+        if (cell.y < 9) {
+            if (this.grid[cell.y + 1][cell.x].value) {
+                neighbors += 1;
+            }
+        }
+
+        return neighbors;
     }
 
     async step() {
@@ -279,7 +347,7 @@ const run = async () => {
                 grid.print(true);
 
                 console.timeEnd('took');
-                await notify(`IT'S SOLVED !!!!`);
+                await notify(`SOLVED WITH ${METHOD.toUpperCase()} METHOD!!!!`, true);
                 break outer;
             }
         }
