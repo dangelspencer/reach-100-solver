@@ -1,6 +1,6 @@
 const SLEEP_TIME = 10;
 const GOAL_NUMBER = 100;
-const METHOD = ['neighbors', 'random', 'distance', 'close-neighbors']
+const METHOD = ['neighbors', 'random', 'distance', 'close-neighbors', 'friendly-neighbors']
     .includes((process.env.METHOD ? process.env.METHOD : '')
     .toLowerCase()) ? process.env.METHOD : 'DEFAULT';
 const DEBUG = process.env.DEBUG === 'true';
@@ -215,6 +215,14 @@ class Grid {
                     }
 
                     return a.distanceFromStart - b.distanceFromStart;
+                });
+            case 'friendly-neighbors':
+                return moves.sort((a,b) => { 
+                    if (b.numNeighbors === a.numNeighbors) {
+                        return a.distanceFromStart - b.distanceFromStart; 
+                    }
+
+                    return b.numNeighbors - a.numNeighbors;
                 });
             default:
                 return moves;
