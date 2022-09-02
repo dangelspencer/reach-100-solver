@@ -1,8 +1,18 @@
 const SLEEP_TIME = 10;
 const GOAL_NUMBER = 100;
-const METHOD = ['neighbors', 'random', 'distance'].includes((process.env.METHOD ? process.env.METHOD : '').toLowerCase()) ? process.env.METHOD : 'DEFAULT';
-const NOTIFICATIONS = process.env.ENABLE_NOTIFICATIONS === 'true' ? true : false;
-const DEBUG = false;
+const METHOD = ['neighbors', 'random', 'distance', 'close-neighbors']
+    .includes((process.env.METHOD ? process.env.METHOD : '')
+    .toLowerCase()) ? process.env.METHOD : 'DEFAULT';
+const DEBUG = process.env.DEBUG === 'true';
+let ALL_NOTIFICATIONS = false;
+let SOLVE_NOTIFICATION = false;
+if (process.env.NOTIFICATIONS) {
+    if (process.env.NOTIFICATIONS.toLowerCase() === 'all') {
+        ALL_NOTIFICATIONS = true;
+    } else if (process.env.NOTIFICATIONS.toLowerCase() === 'solve') {
+        SOLVE_NOTIFICATION = true;
+    }
+}
 
 const util = require('util');
 const exec = util.promisify(require('child_process').exec);
@@ -198,6 +208,14 @@ class Grid {
                     .map(obj => obj.move);
             case 'distance':
                 return moves.sort((a,b) => a.distanceFromStart - b.distanceFromStart);
+            case 'close-neighbors':
+                return moves.sort((a,b) => { 
+                    if (a.distanceFromStart === b.distanceFromStart) {
+                        return b.numNeighbors - a.numNeighbors;
+                    }
+
+                    return a.distanceFromStart - b.distanceFromStart;
+                });
             default:
                 return moves;
         }
@@ -324,7 +342,7 @@ class Grid {
 
         if (this.highestNumber < lastCell.value + 1) {
             this.highestNumber = lastCell.value + 1;
-            if (this.highestNumber > 95) {
+            if (this.highestNumber > 95 && ALL_NOTIFICATIONS) {
                 await notify(`Highest number: ${this.highestNumber}`);
             }
         }
@@ -348,7 +366,7 @@ class Grid {
         if (this.cells[this.cells.length - 1].value < this.backtrackedTo) {
             this.backtrackedTo = this.cells[this.cells.length - 1].value;
 
-            if (this.backtrackedTo < 82) {
+            if (this.backtrackedTo < 82 && ALL_NOTIFICATIONS) {
                 await notify(`Backtracked to: ${this.backtrackedTo}`);
             }
         }
@@ -360,7 +378,9 @@ const run = async () => {
     outer:
     for (let i = 0; i < 10; i++) {
         for (let j = 0; j < 10; j++) {
-            await notify(`Using start position: (${j + 1}, ${i + 1})`);
+            if (ALL_NOTIFICATIONS) {
+                await notify(`Using start position: (${j + 1}, ${i + 1})`);
+            }
             const grid = new Grid(j, i);
             grid.print();
             while (await grid.step()) {}
@@ -371,7 +391,9 @@ const run = async () => {
                 grid.print(true);
 
                 console.timeEnd('took');
-                await notify(`SOLVED WITH ${METHOD.toUpperCase()} METHOD!!!!`, true);
+                if (SOLVE_NOTIFICATION) {
+                    await notify(`SOLVED WITH ${METHOD.toUpperCase()} METHOD!!!!`, true);
+                }
                 break outer;
             }
         }
