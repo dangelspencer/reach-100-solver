@@ -94,18 +94,26 @@ class Grid {
         this.cells.push(cell);
     }
 
-    print(printAllMoves = false) {
-        console.log('\u001B[2J\u001B[0;0f');
+    printStats() {
+        let text = '';
+        text += '\u001B[2J\u001B[0;0f';
 
-        console.log(`Start: (${this.cells[0].x + 1},${this.cells[0].y + 1}), Method: ${METHOD ? METHOD.toUpperCase() : 'DEFAULT'}`);
-        console.log(`Highest: ${getColorForCell(this.highestNumber)}, Backtracked: ${getColorForCell(this.backtrackedTo)}`);
-        console.log(`Current: ${getColorForCell(this.cells[this.cells.length - 1].value)}`);
-        console.log();
+        text += `\nStart: (${this.cells[0].x + 1},${this.cells[0].y + 1}), Method: ${METHOD ? METHOD.toUpperCase() : 'DEFAULT'}`;
+        text += `\nHighest: ${getColorForCell(this.highestNumber)}, Backtracked: ${getColorForCell(this.backtrackedTo)}`;
+        text += `\nCurrent: ${getColorForCell(this.cells[this.cells.length - 1].value)}`;
+        text += '\n';
 
-        console.log('---------------------------------------------------');
+        return text;
+    }
+
+
+    printState(printAllMoves = false) {
+        let text = '';
+
+        text += '\n---------------------------------------------------';
         for (const row of this.grid) {
-            console.log('| ' + row.map(cell => cell.value == null ? '  ' : getColorForCell(cell.value)).join(' | ') + ' |');
-            console.log('---------------------------------------------------');
+            text += '\n| ' + row.map(cell => cell.value == null ? '  ' : getColorForCell(cell.value)).join(' | ') + ' |';
+            text += '\n---------------------------------------------------';
         }
 
         if (DEBUG || printAllMoves) {
@@ -118,17 +126,19 @@ class Grid {
             for (let i = startIndex; i < this.moves.length; i++) {
                 const move = this.moves[i];
                 const number = i + 2;
-                console.log(`${number}: ${move.direction} -> (${move.x + 1}, ${move.y + 1})`);
+                text += `\n${number}: ${move.direction} -> (${move.x + 1}, ${move.y + 1})`;
             }
 
-            console.log();
+            text += '\n';
 
             if (!printAllMoves) {
-                console.log(this.cells[this.cells.length - 1]);
+                text += this.cells[this.cells.length - 1];
             } else {
-                console.log('\x1b[32mSUCCESS!!!\x1b[0m');
+                text += '\n\x1b[32mSUCCESS!\x1b[0m';
             }
         }
+
+        return text;
     }
 
     distanceFromStart(cell) {
@@ -336,7 +346,11 @@ class Grid {
             cell.moves.splice(0, 1);
         }
 
-        this.print();
+        const stats = this.printStats();
+        const gridState = this.printState();
+
+        console.log(stats);
+        console.log(gridState);
 
         await this.sleep(SLEEP_TIME);
 
