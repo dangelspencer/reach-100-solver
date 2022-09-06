@@ -1,10 +1,11 @@
-const SLEEP_TIME = 0;
 const GOAL_NUMBER = 100;
-const METHOD = ['neighbors', 'random', 'distance', 'close-neighbors', 'friendly-neighbors', 'social-distancing', 'lowest-moves']
+const METHODS = ['all', 'default', 'neighbors', 'random', 'distance', 'close-neighbors', 'friendly-neighbors', 'social-distancing', 'lowest-moves'];
+const METHOD = METHODS
     .includes((process.env.METHOD ? process.env.METHOD : '')
     .toLowerCase()) ? process.env.METHOD : 'DEFAULT';
 const DEBUG = process.env.DEBUG === 'true';
 const SOLVE_ALL_POSITIONS = process.env.SOLVE_ALL_POSITIONS === 'true' || process.env.SOLVE_ALL_POSITIONS === 'TRUE';
+
 let ALL_NOTIFICATIONS = false;
 let SOLVE_NOTIFICATION = false;
 if (process.env.NOTIFICATIONS) {
@@ -60,7 +61,8 @@ class Move {
 }
 
 class Grid {
-    constructor(startX, startY) {
+    constructor(startX, startY, method) {
+        this.method = method;
         this.resetGrid();
         this.createInitialCell(startX, startY);
     }
@@ -95,21 +97,14 @@ class Grid {
         this.cells.push(cell);
     }
 
-    printStats() {
+    printState(printAllMoves = false) {
         let text = '';
         text += '\u001B[2J\u001B[0;0f';
 
-        text += `\nStart: (${this.cells[0].x + 1},${this.cells[0].y + 1}), Method: ${METHOD ? METHOD.toUpperCase() : 'DEFAULT'}`;
+        text += `\nStart: (${this.cells[0].x + 1},${this.cells[0].y + 1}), Method: ${this.method ? this.method.toUpperCase() : 'DEFAULT'}`;
         text += `\nHighest: ${getColorForCell(this.highestNumber)}, Backtracked: ${getColorForCell(this.backtrackedTo)}`;
         text += `\nCurrent: ${getColorForCell(this.cells[this.cells.length - 1].value)}`;
         text += '\n';
-
-        return text;
-    }
-
-
-    printState(printAllMoves = false) {
-        let text = '';
 
         text += '\n---------------------------------------------------';
         for (const row of this.grid) {
@@ -210,7 +205,7 @@ class Grid {
             return moves;
         }
 
-        switch (METHOD.toLowerCase()) {
+        switch (this.method.toLowerCase()) {
             case 'neighbors':
                 return moves.sort((a,b) => b.numNeighbors - a.numNeighbors);
             case 'random':
@@ -250,16 +245,6 @@ class Grid {
             default:
                 return moves;
         }
-    }
-
-    async sleep (time) {
-        if (time == 0) {
-            return;
-        }
-
-        return new Promise((resolve) => {
-            setTimeout(() => resolve(), time);
-        })
     }
 
     unreachableCellsAfterMove(move) {
@@ -360,17 +345,12 @@ class Grid {
             cell.moves.splice(0, 1);
         }
 
-        if (SLEEP_TIME > 9 || this.steps === 5000) {
-            const stats = this.printStats();
+        if (this.steps === 5000) {
             const gridState = this.printState();
-
-            console.log(stats);
             console.log(gridState);
 
             this.steps = 0;
         }
-
-        await this.sleep(SLEEP_TIME);
 
         return this.cells[this.cells.length - 1].value === GOAL_NUMBER ? false : true;
     }
@@ -456,7 +436,7 @@ const getFormatTime = (time) => {
     return formattedParts.join(', ');
 }
 
-const run = async () => {
+const solve = async (solveMethod) => {
     const timings = [];
 
     outer:
@@ -466,7 +446,7 @@ const run = async () => {
             if (ALL_NOTIFICATIONS) {
                 await notify(`Using start position: (${j + 1}, ${i + 1})`);
             }
-            const grid = new Grid(j, i);
+            const grid = new Grid(j, i, solveMethod);
             while (await grid.step()) {}
 
             const end = performance.now();
@@ -475,24 +455,57 @@ const run = async () => {
 
             timings.push(duration);
             const formattedTime = getFormatTime(duration);
-            if (SOLVE_NOTIFICATION) {
+            if (SOLVE_NOTIFICATION && METHOD !== 'all') {
                 await notify(`${METHOD.toUpperCase()} - solved from (${j + 1}, ${i + 1}) in ${formattedTime}`);
             }
 
-            if(!SOLVE_ALL_POSITIONS) {
+            if(!SOLVE_ALL_POSITIONS && METHOD !== 'all') {
+                console.log(grid.printState(true));
+                console.log(`took: ${formattedTime}`);
                 break outer;
             }
         }
     }
 
+    if (!SOLVE_ALL_POSITIONS) {
+        return;
+    }
+
     const averageSolveTime = timings.reduce((acc, timing) => acc + timing, 0) / timings.length;
 
-    const finishedMessage = `${METHOD.toUpperCase()} - average solve time: ${getFormatTime(averageSolveTime)}`;
+    if (METHOD !== 'all') {
+        const finishedMessage = `${METHOD.toUpperCase()} - average solve time: ${getFormatTime(averageSolveTime)}`;
 
-    console.clear();
-    console.log(finishedMessage);
-    if (SOLVE_NOTIFICATION) {
-        await notify(finishedMessage);
+        console.log('\u001B[2J\u001B[0;0f');
+        console.log(finishedMessage);
+        if (SOLVE_NOTIFICATION) {
+            await notify(finishedMessage);
+        }
+    }
+
+    return averageSolveTime;
+}
+
+const run = async () => {
+    if (!METHOD || METHOD !== 'all') {
+        await solve(METHOD);
+    } else {
+        const solveStats = {};
+        METHODS.splice(0, 1);
+        for (const solveMethod of METHODS) {
+            solveStats[solveMethod] = getFormatTime(await solve(solveMethod));
+        }
+
+        let finishedMessage = `Average Times for Methods:\n`;
+        for (const solveMethod of METHODS) {
+            finishedMessage += `\n${solveMethod.toUpperCase()} -> ${solveStats[solveMethod]}`;
+        }
+        console.log('\u001B[2J\u001B[0;0f');
+        console.log(finishedMessage);
+
+        if (SOLVE_NOTIFICATION) {
+            await notify(finishedMessage);
+        }
     }
 }
 
