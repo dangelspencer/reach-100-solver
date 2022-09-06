@@ -99,7 +99,9 @@ class Grid {
 
     printState(printAllMoves = false) {
         let text = '';
-        text += '\u001B[2J\u001B[0;0f';
+        if (!printAllMoves) {
+            text += '\u001B[2J\u001B[0;0f';
+        }
 
         text += `\nStart: (${this.cells[0].x + 1},${this.cells[0].y + 1}), Method: ${this.method ? this.method.toUpperCase() : 'DEFAULT'}`;
         text += `\nHighest: ${getColorForCell(this.highestNumber)}, Backtracked: ${getColorForCell(this.backtrackedTo)}`;
@@ -345,7 +347,7 @@ class Grid {
             cell.moves.splice(0, 1);
         }
 
-        if (this.steps === 5000) {
+        if (this.steps === 10000) {
             const gridState = this.printState();
             console.log(gridState);
 
@@ -437,7 +439,7 @@ const getFormatTime = (time) => {
 }
 
 const solve = async (solveMethod) => {
-    const timings = [];
+    const stats = [];
 
     outer:
     for (let i = 0; i < 10; i++) {
@@ -451,11 +453,15 @@ const solve = async (solveMethod) => {
 
             const end = performance.now();
 
-            const duration = end - start;
+            const gridStats = {
+                startPos: `(${j + 1}, ${i + 1})`,
+                solveTime: end - start,
+                gridState: grid.printState(true),
+            };
 
-            timings.push(duration);
-            const formattedTime = getFormatTime(duration);
-            if (SOLVE_NOTIFICATION && METHOD !== 'all') {
+            stats.push(gridStats);
+            const formattedTime = getFormatTime(gridStats.solveTime);
+            if (SOLVE_NOTIFICATION && METHOD !== 'all' && !SOLVE_ALL_POSITIONS) {
                 await notify(`${METHOD.toUpperCase()} - solved from (${j + 1}, ${i + 1}) in ${formattedTime}`);
             }
 
@@ -471,10 +477,12 @@ const solve = async (solveMethod) => {
         return;
     }
 
-    const averageSolveTime = timings.reduce((acc, timing) => acc + timing, 0) / timings.length;
+    const maxSolve = stats.reduce((acc, stat) => !acc || acc.solveTime < stat.solveTime ? stat : acc);
+    const minSolve = stats.reduce((acc, stat) => !acc || acc.solveTime > stat.solveTime ? stat : acc);
+    const averageSolveTime = stats.reduce((acc, stat) => acc + stat.solveTime, 0) / stats.length;
 
     if (METHOD !== 'all') {
-        const finishedMessage = `${METHOD.toUpperCase()} - average solve time: ${getFormatTime(averageSolveTime)}`;
+        const finishedMessage = `${METHOD.toUpperCase()}\n\taverage: ${getFormatTime(averageSolveTime)}\n\tmax: ${getFormatTime(maxSolve.solveTime)}\n\tmin: ${getFormatTime(minSolve.solveTime)}\n\n\n\nMax Solve: ${maxSolve.gridState}\n\n\n\nMin Solve: ${minSolve.gridState}`;
 
         console.log('\u001B[2J\u001B[0;0f');
         console.log(finishedMessage);
