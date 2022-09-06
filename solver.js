@@ -1,6 +1,6 @@
-const SLEEP_TIME = 10;
+const SLEEP_TIME = 0;
 const GOAL_NUMBER = 100;
-const METHOD = ['neighbors', 'random', 'distance', 'close-neighbors', 'friendly-neighbors', 'social-distancing']
+const METHOD = ['neighbors', 'random', 'distance', 'close-neighbors', 'friendly-neighbors', 'social-distancing', 'lowest-moves']
     .includes((process.env.METHOD ? process.env.METHOD : '')
     .toLowerCase()) ? process.env.METHOD : 'DEFAULT';
 const DEBUG = process.env.DEBUG === 'true';
@@ -82,6 +82,7 @@ class Grid {
         this.cells = [];
         this.highestNumber = 0;
         this.backtrackedTo = 100;
+        this.steps = 0;
     }
 
     createInitialCell(x, y) {
@@ -154,7 +155,7 @@ class Grid {
         return x + y;
     }
 
-    availableMoves(cell) {
+    availableMoves(cell, ignoreMethod = false) {
         const moves = [];
 
         // NORTH
@@ -205,13 +206,17 @@ class Grid {
             moves.push(new Move(cell.x - 2, cell.y - 2, 'NORTH-WEST', this.numNeighbors(targetCell), this.distanceFromStart(targetCell)));
         }
 
+        if (ignoreMethod) {
+            return moves;
+        }
+
         switch (METHOD.toLowerCase()) {
             case 'neighbors':
                 return moves.sort((a,b) => b.numNeighbors - a.numNeighbors);
             case 'random':
                 return moves
                     .map(move => { 
-                        return { move, weight: Math.random()}
+                        return { move, weight: Math.random() }
                     })
                     .sort((a, b) => a.weight - b.weight)
                     .map(obj => obj.move);
@@ -235,6 +240,13 @@ class Grid {
                 });
             case 'social-distancing':
                 return moves.sort((a,b) => a.numNeighbors - b.numNeighbors);
+            case 'lowest-moves':
+                return moves
+                    .map(move => { 
+                        return { move, weight: this.availableMoves(this.grid[move.y][move.x], true).length }
+                    })
+                    .sort((a, b) => a.weight - b.weight)
+                    .map(obj => obj.move);
             default:
                 return moves;
         }
@@ -336,6 +348,8 @@ class Grid {
     }
 
     async step() {
+        this.steps += 1;
+
         // get current cell
         const cell = this.cells[this.cells.length - 1];
 
@@ -346,11 +360,15 @@ class Grid {
             cell.moves.splice(0, 1);
         }
 
-        const stats = this.printStats();
-        const gridState = this.printState();
+        if (SLEEP_TIME > 9 || this.steps === 5000) {
+            const stats = this.printStats();
+            const gridState = this.printState();
 
-        console.log(stats);
-        console.log(gridState);
+            console.log(stats);
+            console.log(gridState);
+
+            this.steps = 0;
+        }
 
         await this.sleep(SLEEP_TIME);
 
