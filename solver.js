@@ -4,6 +4,7 @@ const METHOD = ['neighbors', 'random', 'distance', 'close-neighbors', 'friendly-
     .includes((process.env.METHOD ? process.env.METHOD : '')
     .toLowerCase()) ? process.env.METHOD : 'DEFAULT';
 const DEBUG = process.env.DEBUG === 'true';
+const SOLVE_ALL_POSITIONS = process.env.SOLVE_ALL_POSITIONS === 'true' || process.env.SOLVE_ALL_POSITIONS === 'TRUE';
 let ALL_NOTIFICATIONS = false;
 let SOLVE_NOTIFICATION = false;
 if (process.env.NOTIFICATIONS) {
@@ -17,10 +18,8 @@ if (process.env.NOTIFICATIONS) {
 const util = require('util');
 const exec = util.promisify(require('child_process').exec);
 
-const notify = async (message, ignorePreference) => {
-    if (NOTIFICATIONS || ignorePreference) {
-        await exec(`./notify.sh "${message}"`);
-    }
+const notify = async (message) => {
+    await exec(`./notify.sh "${message}"`);
 }
 
 const getColorForCell = (value) => {
@@ -383,31 +382,86 @@ class Grid {
     }
 }
 
+const getFormatTime = (time) => {
+    let leftover = time;
+
+    const days = Math.floor(leftover / 1000 / 60 / 60 / 24);
+    leftover = leftover - (days * 24 * 60 * 60 * 1000);
+
+    const hours = Math.floor(leftover / 1000 / 60 / 60);
+    leftover = leftover - (hours * 60 * 60 * 1000);
+
+    const minutes =  Math.floor(leftover / 1000 / 60);
+    leftover = leftover - (minutes * 60 * 1000);
+
+    const seconds =  Math.floor(leftover / 1000);
+    leftover = leftover - (seconds * 1000);
+
+    const milliseconds = Math.floor(leftover);
+
+    const formattedParts = [];
+
+    if (days > 0) {
+        formattedParts.push(`${days}d`);
+    }
+
+    if (hours > 0) {
+        formattedParts.push(`${hours}h`);
+    }
+
+    if (minutes > 0) {
+        formattedParts.push(`${minutes}m`);
+    }
+
+    if (seconds > 0) {
+        formattedParts.push(`${seconds}s`);
+    }
+
+    if (milliseconds > 0) {
+        formattedParts.push(`${milliseconds}ms`);
+    }
+
+    return formattedParts.join(', ');
+}
+
 const run = async () => {
-    console.time('took');
+    const timings = [];
+
     outer:
     for (let i = 0; i < 10; i++) {
         for (let j = 0; j < 10; j++) {
+            const start = performance.now();
             if (ALL_NOTIFICATIONS) {
                 await notify(`Using start position: (${j + 1}, ${i + 1})`);
             }
             const grid = new Grid(j, i);
-            grid.print();
             while (await grid.step()) {}
 
-            const lastCell = grid.cells[grid.cells.length - 1];
+            const end = performance.now();
 
-            if (lastCell.value === GOAL_NUMBER) {
-                grid.print(true);
+            const duration = end - start;
 
-                console.timeEnd('took');
-                if (SOLVE_NOTIFICATION) {
-                    await notify(`SOLVED WITH ${METHOD.toUpperCase()} METHOD!!!!`, true);
-                }
+            timings.push(duration);
+            const formattedTime = getFormatTime(duration);
+            if (SOLVE_NOTIFICATION) {
+                await notify(`${METHOD.toUpperCase()} - solved from (${j + 1}, ${i + 1}) in ${formattedTime}`);
+            }
+
+            if(!SOLVE_ALL_POSITIONS) {
                 break outer;
             }
         }
-    }    
+    }
+
+    const averageSolveTime = timings.reduce((acc, timing) => acc + timing, 0) / timings.length;
+
+    const finishedMessage = `${METHOD.toUpperCase()} - average solve time: ${getFormatTime(averageSolveTime)}`;
+
+    console.clear();
+    console.log(finishedMessage);
+    if (SOLVE_NOTIFICATION) {
+        await notify(finishedMessage);
+    }
 }
 
 run();
