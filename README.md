@@ -13,6 +13,7 @@ https://reach-100.com/
 * CLOSE-NEIGHBORS: prefers DISTANCE method, falling back to NEIGHBORS when the distances are the same
 * FRIENDLY-NEIGHBORS: prefers NEIGHBORS method and falls back to DISTANCE
 * SOCIAL-DISTANCING: prefers cells with the fewest amount of neighboring numbers
+* LOWEST-MOVES: prefers to place next number in cells with the least amount of possible moves
 
 ## Environment Vars
 | Name | Description                | Type    | Default Value |
@@ -20,3 +21,4 @@ https://reach-100.com/
 |METHOD| which method to solve with | (see above)  | DEFAULT       |
 |DEBUG | enables debug logging      | boolean | false         |
 |NOTIFICATIONS | which notifications to enable | ['ALL', 'SOLVE'] | none | 
+|SOLVE_ALL_POSITIONS | solves for all starting positions and prints average solve time to console | boolean | false |
