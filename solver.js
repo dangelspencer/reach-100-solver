@@ -1,4 +1,5 @@
 const GOAL_NUMBER = 100;
+const SLEEP_TIME = process.env.SLEEP_TIME && parseInt(process.env.SLEEP_TIME) != NaN ? parseInt(process.env.SLEEP_TIME) : 50;
 const METHODS = ['all', 'default', 'neighbors', 'random', 'distance', 'close-neighbors', 'friendly-neighbors', 'social-distancing', 'lowest-moves'];
 const METHOD = METHODS
     .includes((process.env.METHOD ? process.env.METHOD : '')
@@ -15,6 +16,8 @@ if (process.env.NOTIFICATIONS) {
         SOLVE_NOTIFICATION = true;
     }
 }
+
+let SOLVED_POSITIONS = 0;
 
 const util = require('util');
 const exec = util.promisify(require('child_process').exec);
@@ -103,8 +106,12 @@ class Grid {
             text += '\u001B[2J\u001B[0;0f';
         }
 
+        if (SOLVE_ALL_POSITIONS && !printAllMoves) {
+            text += `\nSolving all postions: ${SOLVED_POSITIONS + 1} of 100`;
+        }
+
         text += `\nStart: (${this.cells[0].x + 1},${this.cells[0].y + 1}), Method: ${this.method ? this.method.toUpperCase() : 'DEFAULT'}`;
-        text += `\nHighest: ${getColorForCell(this.highestNumber)}, Backtracked: ${getColorForCell(this.backtrackedTo)}`;
+        text += `\nHighest: ${getColorForCell(this.highestNumber)}, Backtracked: ${this.backtrackedTo === 100 ? '-' : getColorForCell(this.backtrackedTo)}`;
         text += `\nCurrent: ${getColorForCell(this.cells[this.cells.length - 1].value)}`;
         text += '\n';
 
@@ -334,6 +341,16 @@ class Grid {
         return neighbors;
     }
 
+    async delay() {
+        if (SLEEP_TIME === 0) {
+            return;
+        }
+
+        return new Promise(resolve => {
+            setTimeout(() => resolve(), SLEEP_TIME);
+        });
+    }
+
     async step() {
         this.steps += 1;
 
@@ -347,12 +364,14 @@ class Grid {
             cell.moves.splice(0, 1);
         }
 
-        if (this.steps === 10000) {
+        if (SLEEP_TIME > 9 || this.steps === 15000) {
             const gridState = this.printState();
             console.log(gridState);
 
             this.steps = 0;
         }
+
+        await this.delay();
 
         return this.cells[this.cells.length - 1].value === GOAL_NUMBER ? false : true;
     }
@@ -450,6 +469,7 @@ const solve = async (solveMethod) => {
             }
             const grid = new Grid(j, i, solveMethod);
             while (await grid.step()) {}
+            SOLVED_POSITIONS += 1;
 
             const end = performance.now();
 
